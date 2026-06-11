@@ -21,12 +21,20 @@ type SettingsResource struct {
 type SettingsModel struct {
 	Title           types.String `tfsdk:"title"`
 	Description     types.String `tfsdk:"description"`
-	Lang            types.String `tfsdk:"lang"`
+	Locale          types.String `tfsdk:"locale"`
 	Timezone        types.String `tfsdk:"timezone"`
 	MetaTitle       types.String `tfsdk:"meta_title"`
 	MetaDescription types.String `tfsdk:"meta_description"`
-	Twitter         types.String `tfsdk:"twitter"`
-	Facebook        types.String `tfsdk:"facebook"`
+	// Social accounts
+	Twitter   types.String `tfsdk:"twitter"`
+	Facebook  types.String `tfsdk:"facebook"`
+	Threads   types.String `tfsdk:"threads"`
+	Bluesky   types.String `tfsdk:"bluesky"`
+	Mastodon  types.String `tfsdk:"mastodon"`
+	Tiktok    types.String `tfsdk:"tiktok"`
+	Youtube   types.String `tfsdk:"youtube"`
+	Instagram types.String `tfsdk:"instagram"`
+	Linkedin  types.String `tfsdk:"linkedin"`
 }
 
 func NewSettingsResource() resource.Resource {
@@ -53,8 +61,8 @@ func (r *SettingsResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Computed:            true,
 				Default:             stringdefault.StaticString(""),
 			},
-			"lang": schema.StringAttribute{
-				MarkdownDescription: "Site language code (e.g. `en`, `de`, `fr`). Defaults to `en`.",
+			"locale": schema.StringAttribute{
+				MarkdownDescription: "Site language/locale code (e.g. `en`, `de`, `fr`). Defaults to `en`.",
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("en"),
@@ -89,6 +97,48 @@ func (r *SettingsResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				Computed:            true,
 				Default:             stringdefault.StaticString(""),
 			},
+			"threads": schema.StringAttribute{
+				MarkdownDescription: "Threads handle.",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString(""),
+			},
+			"bluesky": schema.StringAttribute{
+				MarkdownDescription: "Bluesky handle.",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString(""),
+			},
+			"mastodon": schema.StringAttribute{
+				MarkdownDescription: "Mastodon profile URL.",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString(""),
+			},
+			"tiktok": schema.StringAttribute{
+				MarkdownDescription: "TikTok handle.",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString(""),
+			},
+			"youtube": schema.StringAttribute{
+				MarkdownDescription: "YouTube channel URL or handle.",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString(""),
+			},
+			"instagram": schema.StringAttribute{
+				MarkdownDescription: "Instagram handle.",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString(""),
+			},
+			"linkedin": schema.StringAttribute{
+				MarkdownDescription: "LinkedIn profile or page URL.",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString(""),
+			},
 		},
 	}
 }
@@ -116,7 +166,6 @@ func (r *SettingsResource) Create(ctx context.Context, req resource.CreateReques
 		resp.Diagnostics.AddError("Error applying settings", err.Error())
 		return
 	}
-	// Read back to reconcile any server-side transformations.
 	r.readInto(ctx, &data, &resp.Diagnostics)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -163,23 +212,37 @@ func (r *SettingsResource) readInto(ctx context.Context, data *SettingsModel, di
 	}
 	data.Title = types.StringValue(s.Title)
 	data.Description = types.StringValue(s.Description)
-	data.Lang = types.StringValue(s.Lang)
+	data.Locale = types.StringValue(s.Locale)
 	data.Timezone = types.StringValue(s.Timezone)
 	data.MetaTitle = types.StringValue(s.MetaTitle)
 	data.MetaDescription = types.StringValue(s.MetaDescription)
 	data.Twitter = types.StringValue(s.Twitter)
 	data.Facebook = types.StringValue(s.Facebook)
+	data.Threads = types.StringValue(s.Threads)
+	data.Bluesky = types.StringValue(s.Bluesky)
+	data.Mastodon = types.StringValue(s.Mastodon)
+	data.Tiktok = types.StringValue(s.Tiktok)
+	data.Youtube = types.StringValue(s.Youtube)
+	data.Instagram = types.StringValue(s.Instagram)
+	data.Linkedin = types.StringValue(s.Linkedin)
 }
 
 func modelToSettings(m SettingsModel) ghost.Settings {
 	return ghost.Settings{
 		Title:           m.Title.ValueString(),
 		Description:     m.Description.ValueString(),
-		Lang:            m.Lang.ValueString(),
+		Locale:          m.Locale.ValueString(),
 		Timezone:        m.Timezone.ValueString(),
 		MetaTitle:       m.MetaTitle.ValueString(),
 		MetaDescription: m.MetaDescription.ValueString(),
 		Twitter:         m.Twitter.ValueString(),
 		Facebook:        m.Facebook.ValueString(),
+		Threads:         m.Threads.ValueString(),
+		Bluesky:         m.Bluesky.ValueString(),
+		Mastodon:        m.Mastodon.ValueString(),
+		Tiktok:          m.Tiktok.ValueString(),
+		Youtube:         m.Youtube.ValueString(),
+		Instagram:       m.Instagram.ValueString(),
+		Linkedin:        m.Linkedin.ValueString(),
 	}
 }

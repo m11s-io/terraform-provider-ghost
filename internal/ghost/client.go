@@ -101,16 +101,24 @@ func expectStatus(resp *http.Response, codes ...int) error {
 
 // --- Settings ---
 
-// Settings represents a subset of Ghost site settings manageable via Terraform.
+// Settings represents Ghost site settings manageable via Terraform.
 type Settings struct {
 	Title           string `json:"title,omitempty"`
 	Description     string `json:"description,omitempty"`
-	Lang            string `json:"lang,omitempty"`
+	Locale          string `json:"locale,omitempty"`
 	Timezone        string `json:"timezone,omitempty"`
 	MetaTitle       string `json:"meta_title,omitempty"`
 	MetaDescription string `json:"meta_description,omitempty"`
-	Twitter         string `json:"twitter,omitempty"`
-	Facebook        string `json:"facebook,omitempty"`
+	// Social accounts
+	Twitter   string `json:"twitter,omitempty"`
+	Facebook  string `json:"facebook,omitempty"`
+	Threads   string `json:"threads,omitempty"`
+	Bluesky   string `json:"bluesky,omitempty"`
+	Mastodon  string `json:"mastodon,omitempty"`
+	Tiktok    string `json:"tiktok,omitempty"`
+	Youtube   string `json:"youtube,omitempty"`
+	Instagram string `json:"instagram,omitempty"`
+	Linkedin  string `json:"linkedin,omitempty"`
 }
 
 type settingsEnvelope struct {
@@ -146,8 +154,8 @@ func (c *Client) GetSettings(ctx context.Context) (*Settings, error) {
 			s.Title = v
 		case "description":
 			s.Description = v
-		case "lang":
-			s.Lang = v
+		case "locale":
+			s.Locale = v
 		case "timezone":
 			s.Timezone = v
 		case "meta_title":
@@ -158,6 +166,20 @@ func (c *Client) GetSettings(ctx context.Context) (*Settings, error) {
 			s.Twitter = v
 		case "facebook":
 			s.Facebook = v
+		case "threads":
+			s.Threads = v
+		case "bluesky":
+			s.Bluesky = v
+		case "mastodon":
+			s.Mastodon = v
+		case "tiktok":
+			s.Tiktok = v
+		case "youtube":
+			s.Youtube = v
+		case "instagram":
+			s.Instagram = v
+		case "linkedin":
+			s.Linkedin = v
 		}
 	}
 	return s, nil
@@ -168,12 +190,19 @@ func (c *Client) UpdateSettings(ctx context.Context, s Settings) error {
 	kvs := []settingKV{
 		{Key: "title", Value: s.Title},
 		{Key: "description", Value: s.Description},
-		{Key: "lang", Value: s.Lang},
+		{Key: "locale", Value: s.Locale},
 		{Key: "timezone", Value: s.Timezone},
 		{Key: "meta_title", Value: s.MetaTitle},
 		{Key: "meta_description", Value: s.MetaDescription},
 		{Key: "twitter", Value: s.Twitter},
 		{Key: "facebook", Value: s.Facebook},
+		{Key: "threads", Value: s.Threads},
+		{Key: "bluesky", Value: s.Bluesky},
+		{Key: "mastodon", Value: s.Mastodon},
+		{Key: "tiktok", Value: s.Tiktok},
+		{Key: "youtube", Value: s.Youtube},
+		{Key: "instagram", Value: s.Instagram},
+		{Key: "linkedin", Value: s.Linkedin},
 	}
 	env := settingsEnvelope{Settings: kvs}
 	resp, err := c.do(ctx, http.MethodPut, "/settings/", env)
@@ -184,17 +213,119 @@ func (c *Client) UpdateSettings(ctx context.Context, s Settings) error {
 	return expectStatus(resp, http.StatusOK)
 }
 
+// --- Integrations ---
+
+// Integration represents a Ghost custom integration with its API keys.
+type Integration struct {
+	ID          string   `json:"id,omitempty"`
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	IconImage   string   `json:"icon_image,omitempty"`
+	APIKeys     []APIKey `json:"api_keys,omitempty"`
+}
+
+// APIKey is an API key belonging to an integration.
+type APIKey struct {
+	ID     string `json:"id"`
+	Type   string `json:"type"`   // "content" or "admin"
+	Secret string `json:"secret"` // content: plain hex; admin: "<id>:<hex>"
+}
+
+type integrationEnvelope struct {
+	Integrations []Integration `json:"integrations"`
+}
+
+// CreateIntegration creates a new custom integration. Ghost auto-generates
+// one content key and one admin key on creation.
+func (c *Client) CreateIntegration(ctx context.Context, in Integration) (*Integration, error) {
+	env := integrationEnvelope{Integrations: []Integration{in}}
+	resp, err := c.do(ctx, http.MethodPost, "/integrations/?include=api_keys,webhooks", env)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if err := expectStatus(resp, http.StatusCreated); err != nil {
+		return nil, err
+	}
+	var out integrationEnvelope
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("decoding integration: %w", err)
+	}
+	if len(out.Integrations) == 0 {
+		return nil, fmt.Errorf("no integration in response")
+	}
+	return &out.Integrations[0], nil
+}
+
+// GetIntegration fetches an integration by ID including its API keys.
+func (c *Client) GetIntegration(ctx context.Context, id string) (*Integration, error) {
+	resp, err := c.do(ctx, http.MethodGet, "/integrations/"+id+"/?include=api_keys,webhooks", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+	if err := expectStatus(resp, http.StatusOK); err != nil {
+		return nil, err
+	}
+	var out integrationEnvelope
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("decoding integration: %w", err)
+	}
+	if len(out.Integrations) == 0 {
+		return nil, fmt.Errorf("no integration in response")
+	}
+	return &out.Integrations[0], nil
+}
+
+// UpdateIntegration updates the name/description/icon of an existing integration.
+// Ghost always returns api_keys (with secrets) in the response.
+func (c *Client) UpdateIntegration(ctx context.Context, id string, in Integration) (*Integration, error) {
+	env := integrationEnvelope{Integrations: []Integration{in}}
+	resp, err := c.do(ctx, http.MethodPut, "/integrations/"+id+"/?include=api_keys,webhooks", env)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if err := expectStatus(resp, http.StatusOK); err != nil {
+		return nil, err
+	}
+	var out integrationEnvelope
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("decoding integration: %w", err)
+	}
+	if len(out.Integrations) == 0 {
+		return nil, fmt.Errorf("no integration in response")
+	}
+	return &out.Integrations[0], nil
+}
+
+// DeleteIntegration deletes an integration and all its API keys.
+func (c *Client) DeleteIntegration(ctx context.Context, id string) error {
+	resp, err := c.do(ctx, http.MethodDelete, "/integrations/"+id+"/", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	return expectStatus(resp, http.StatusNoContent)
+}
+
 // --- Webhooks ---
 
 // Webhook represents a Ghost webhook.
 type Webhook struct {
-	ID             string `json:"id,omitempty"`
-	Event          string `json:"event"`
-	TargetURL      string `json:"target_url"`
-	Name           string `json:"name,omitempty"`
-	Secret         string `json:"secret,omitempty"`
-	APIVersion     string `json:"api_version,omitempty"`
-	IntegrationID  string `json:"integration_id,omitempty"`
+	ID            string `json:"id,omitempty"`
+	Event         string `json:"event"`
+	TargetURL     string `json:"target_url"`
+	Name          string `json:"name,omitempty"`
+	Secret        string `json:"secret,omitempty"`
+	APIVersion    string `json:"api_version,omitempty"`
+	IntegrationID string `json:"integration_id,omitempty"`
 }
 
 type webhookEnvelope struct {
